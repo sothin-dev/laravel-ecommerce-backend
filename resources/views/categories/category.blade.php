@@ -29,8 +29,6 @@
 
         </div>
 
-        @include('partials.create-modal')
-
         <!-- Card -->
         <div class="bg-white rounded-2xl shadow border overflow-hidden">
 
@@ -147,18 +145,19 @@
 
                                         <div class="flex justify-end gap-2">
 
-                                            <button class="px-4 py-2 border rounded-lg hover:bg-gray-100">
+                                            <a href="{{ route('categories.edit', $category->id) }}"
+                                                class="px-4 py-2 border rounded-lg hover:bg-gray-100">
 
                                                 Edit
 
-                                            </button>
+                                            </a>
 
-                                            <button class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
-
+                                            <button
+                                                onclick="document.getElementById('deleteModal').classList.remove('hidden')"
+                                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
                                                 Delete
-
                                             </button>
-
+                                            @include('categories.delete', ['category' => $category])
                                         </div>
 
                                     </td>

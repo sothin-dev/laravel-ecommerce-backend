@@ -16,7 +16,7 @@
 
                     <div>
                         <h1 class="text-2xl font-bold text-gray-800">
-                            Create Category
+                            Update Category
                         </h1>
 
                         <p class="mt-1 text-sm text-gray-500">
@@ -24,17 +24,17 @@
                         </p>
                     </div>
 
-                    <a href="{{ route('categories.index') }}" type="button" onclick="document.getElementById('createModal').classList.add('hidden')"
-                        class="text-gray-400 hover:text-red-500 text-3xl">
+                    <a href="{{ route('categories.index') }}" type="button" class="text-gray-400 hover:text-red-500 text-3xl">
                         &times;
                     </a>
 
                 </div>
 
-                <form action="{{ route('categories.store') }}" method="POST" enctype="multipart/form-data"
+                <form action="{{ route('categories.update', $category->id) }}" method="POST" enctype="multipart/form-data"
                     class="p-6 space-y-5">
 
                     @csrf
+                    @method('PATCH')
 
                     <div class="grid md:grid-cols-2 gap-6">
 
@@ -44,7 +44,7 @@
                                 Category Name
                             </label>
 
-                            <input type="text" name="name" value="{{ old('name') }}"
+                            <input type="text" name="name" value="{{ old('name', $category->name) }}"
                                 class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
                                 placeholder="Electronics">
 
@@ -59,9 +59,12 @@
                                 Slug
                             </label>
 
-                            <input type="text" name="slug" value="{{ old('slug') }}"
+                            <input type="text" name="slug" value="{{ old('slug', $category->slug) }}"
                                 class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
                                 placeholder="electronics">
+                            @error('slug')
+                                <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                            @enderror
                         </div>
 
                     </div>
@@ -73,16 +76,27 @@
                         </label>
 
                         <textarea rows="3" name="description" class="w-full px-4 py-3 border rounded-xl resize-none"
-                            placeholder="Write description...">{{ old('description') }}</textarea>
+                            placeholder="Write description...">{{ old('description', $category->description) }}</textarea>
+                        @error('description')
+                            <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                        @enderror
                     </div>
 
                     <!-- Image -->
-                    <label class="block">
-                        <span class="block mb-2 font-medium text-gray-700">
+                    <div>
+                        <label class="block mb-2 font-medium text-gray-700">
                             Category Image
-                        </span>
+                        </label>
 
-                        <div class="border-2 border-dashed rounded-xl p-6 text-center hover:bg-gray-50 cursor-pointer">
+                        @if ($category->image)
+                            <div class="mb-4">
+                                <img src="{{ asset('storage/' . $category->image) }}" alt="{{ $category->name }}"
+                                    class="w-32 h-32 object-cover rounded-lg">
+                            </div>
+                        @endif
+
+                        <label
+                            class="border-2 border-dashed rounded-xl p-6 text-center hover:bg-gray-50 cursor-pointer block">
 
                             <svg class="w-8 h-8 mx-auto text-gray-400" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
@@ -95,13 +109,20 @@
                             </p>
 
                             <input type="file" name="image" class="hidden" accept="image/*">
-                        </div>
-                    </label>
+                        </label>
+
+                        @error('image')
+                            <p class="text-red-500 text-sm mt-1">
+                                {{ $message }}
+                            </p>
+                        @enderror
+                    </div>
 
                     <!-- Status -->
                     <div class="mt-6 flex items-center gap-3">
 
-                        <input type="checkbox" name="is_active" value="1" checked class="w-5 h-5">
+                        <input type="checkbox" name="is_active" value="1"
+                            {{ old('is_active', $category->is_active) ? 'checked' : '' }} class="w-5 h-5">
 
                         <span class="text-gray-700">
                             Active Category

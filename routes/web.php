@@ -20,6 +20,10 @@ Route::middleware('auth:admin')->group(function () {
     Route::get('/categories', [CategoriesController::class, 'index'])->name('categories.index');
     Route::get('/categories/create', [CategoriesController::class, 'create'])->name('categories.create');
     Route::post('/categories', [CategoriesController::class, 'store'])->name('categories.store');
+    Route::get('/categories/{id}', [CategoriesController::class, 'edit'])->name('categories.edit');
+    Route::patch('/categories/{id}', [CategoriesController::class, 'update'])->name('categories.update');
+
+    Route::delete('/categories/{id}', [CategoriesController::class, 'destroy'])->name('categories.destroy');
 
 
 

@@ -3,11 +3,11 @@
 
     <div class="bg-white p-6 rounded-lg shadow-lg w-96">
         <h2 class="text-lg font-semibold mb-4">
-            Delete Category
+            Delete Product
         </h2>
 
         <p class="text-gray-600 mb-6">
-            Are you sure you want to delete this category?
+            Are you sure you want to delete this product?
         </p>
 
         <div class="flex justify-end gap-3">
@@ -19,7 +19,7 @@
             </button>
 
             <!-- Delete -->
-            <form action="{{ route('categories.destroy', $category->id) }}"
+            <form action="{{ route('products.destroy', $product->id) }}"
                   method="POST">
                 @csrf
                 @method('DELETE')

@@ -2,7 +2,9 @@
 
 use App\Http\Controllers\authController;
 use App\Http\Controllers\CategoriesController;
+use App\Http\Controllers\OrderController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -35,6 +37,13 @@ Route::middleware('auth:admin')->group(function () {
     Route::patch('/products/{id}', [ProductController::class, 'update'])->name('products.update');
 
     Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('products.destroy');
+
+    // Orders
+    Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+
+    // Users
+    Route::get('/users', [UserController::class, 'index'])->name('users.index');
+    Route::get('/users/{id}', [UserController::class, 'show'])->name('users.show');
 
 
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');

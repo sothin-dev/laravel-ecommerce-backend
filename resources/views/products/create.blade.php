@@ -200,7 +200,7 @@
             </div>
 
             <!-- Image -->
-            {{-- <div>
+            <div>
                 <label class="block mb-2 font-medium text-gray-700">
                     Product Image
                 </label>
@@ -209,7 +209,7 @@
                     name="image"
                     class="w-full px-4 py-3 border rounded-xl"
                     accept="image/*">
-            </div> --}}
+            </div>
 
             <!-- Status -->
             <div class="flex items-center gap-3">

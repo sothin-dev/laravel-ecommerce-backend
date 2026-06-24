@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class ProductController extends Controller
 {
@@ -43,7 +44,24 @@ class ProductController extends Controller
             'is_active' => 'boolean',
         ]);
 
-        Product::create($validated);
+        $imagePath = null;
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')
+                ->store('products', 'public');
+        }
+
+        Product::create([
+            'category_id' => $validated['category_id'],
+            'name' => $validated['name'],
+            'slug' => $validated['slug'],
+            'description' => $validated['description'],
+            'price' => $validated['price'],
+            'sale_price' => $validated['sale_price'],
+            'stock' => $validated['stock'],
+            'sku' => $validated['sku'],
+            'is_active' => $validated['is_active'],
+            'image' => $imagePath,
+        ]);
 
         return redirect()->route('products.index');
     }
@@ -79,7 +97,21 @@ class ProductController extends Controller
             'stock' => 'required',
             'sku' => 'required|string|unique:products,sku',
             'is_active' => 'nullable|boolean',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
         ]);
+
+        // Handle image upload
+        if ($request->hasFile('image')) {
+
+            // Delete old image if it exists
+            if ($product->image) {
+                Storage::disk('public')->delete($product->image);
+            }
+
+            // Store new image
+            $validated['image'] = $request->file('image')
+                ->store('products', 'public');
+        }
 
 
         // Handle checkbox
@@ -99,6 +131,10 @@ class ProductController extends Controller
     public function destroy(string $id)
     {
         $product = Product::findOrFail($id);
+
+        if ($product->image) {
+            Storage::disk('public')->delete($product->image);
+        }
 
         $product -> delete();
 

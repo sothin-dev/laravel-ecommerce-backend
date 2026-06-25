@@ -40,6 +40,7 @@ Route::middleware('auth:admin')->group(function () {
 
     // Orders
     Route::get('/orders', [OrderController::class, 'index'])->name('orders.index');
+    Route::get('/orders/{id}', [OrderController::class, 'show'])->name('orders.show');
 
     // Users
     Route::get('/users', [UserController::class, 'index'])->name('users.index');

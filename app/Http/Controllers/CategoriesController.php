@@ -35,7 +35,7 @@ class CategoriesController extends Controller
             'slug' => 'required|string|unique:categories,slug',
             'description' => 'required|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
-            'is_active' => 'boolean',
+            'is_active' => 'boolean|nullable',
         ]);
 
         $imagePath = null;
@@ -48,7 +48,7 @@ class CategoriesController extends Controller
             'slug' => $validated['slug'],
             'description' => $validated['description'],
             'image' => $imagePath,
-            'is_active' => $validated['is_active'],
+            'is_active' => $validated['is_active'] ?? 0,
         ]);
 
         return redirect()->route('categories.index');

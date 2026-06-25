@@ -17,6 +17,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'stock',
     'sku',
     'is_active',
+    'image',
 ])]
 class Product extends Model
 {

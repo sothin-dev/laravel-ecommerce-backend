@@ -17,8 +17,9 @@ class Review extends Model
     protected function casts(): array
     {
         return [
-            'rating' => 'integer',
+            'rating'      => 'integer',
             'is_approved' => 'boolean',
+            'order_id'    => 'integer',
         ];
     }
 

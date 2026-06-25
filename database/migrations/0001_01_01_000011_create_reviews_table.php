@@ -15,13 +15,14 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
             $table->foreignId('product_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('order_id')->constrained()->cascadeOnDelete();
+            $table->foreignId('order_id')->nullable()->constrained()->nullOnDelete();
             $table->unsignedTinyInteger('rating');
             $table->text('comment')->nullable();
             $table->boolean('is_approved')->default(false)->index();
             $table->timestamps();
 
-            $table->unique(['user_id', 'product_id', 'order_id']);
+            // Allow one review per user per product (order_id is now optional)
+            $table->unique(['user_id', 'product_id']);
         });
     }
 

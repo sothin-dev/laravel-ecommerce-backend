@@ -42,6 +42,7 @@ class ProductController extends Controller
             'stock' => 'required',
             'sku' => 'required|string|unique:products,sku',
             'is_active' => 'boolean',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
         ]);
 
         $imagePath = null;
@@ -49,6 +50,7 @@ class ProductController extends Controller
             $imagePath = $request->file('image')
                 ->store('products', 'public');
         }
+        // dd($imagePath);
 
         Product::create([
             'category_id' => $validated['category_id'],
@@ -136,7 +138,7 @@ class ProductController extends Controller
             Storage::disk('public')->delete($product->image);
         }
 
-        $product -> delete();
+        $product->delete();
 
         return redirect()->route('products.index');
     }

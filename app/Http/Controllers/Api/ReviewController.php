@@ -7,12 +7,30 @@ use App\Models\Product;
 use App\Models\Review;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use OpenApi\Attributes as OA;
 
 class ReviewController extends Controller
 {
-    /**
-     * List approved reviews for a product.
-     */
+    #[
+        OA\Get(
+            path: '/api/products/{productId}/reviews',
+            summary: 'List approved reviews for a product',
+            tags: ['Reviews'],
+            parameters: [
+                new OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Product reviews', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Review')),
+                        new OA\Property(property: 'avg_rating', type: 'number', format: 'float', example: 4.5),
+                        new OA\Property(property: 'count', type: 'integer', example: 10),
+                    ]
+                )),
+                new OA\Response(response: 404, description: 'Product not found'),
+            ]
+        )
+    ]
     public function index(int $productId): JsonResponse
     {
         $reviews = Review::where('product_id', $productId)
@@ -37,10 +55,42 @@ class ReviewController extends Controller
         ]);
     }
 
-    /**
-     * Submit a review for a product.
-     * User must have purchased this product (optional order association).
-     */
+    #[
+        OA\Post(
+            path: '/api/products/{productId}/reviews',
+            summary: 'Submit a review for a product',
+            tags: ['Reviews'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            requestBody: new OA\RequestBody(
+                required: true,
+                content: new OA\JsonContent(
+                    required: ['rating'],
+                    properties: [
+                        new OA\Property(property: 'rating', type: 'integer', example: 5, minimum: 1, maximum: 5),
+                        new OA\Property(property: 'comment', type: 'string', maxLength: 1000, example: 'Great product!'),
+                        new OA\Property(property: 'order_id', type: 'integer', nullable: true, example: 1),
+                    ]
+                )
+            ),
+            responses: [
+                new OA\Response(response: 201, description: 'Review submitted', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Review submitted. It will appear after approval.'),
+                        new OA\Property(property: 'data', properties: [
+                            new OA\Property(property: 'id', type: 'integer'),
+                            new OA\Property(property: 'rating', type: 'integer'),
+                            new OA\Property(property: 'comment', type: 'string'),
+                        ], type: 'object'),
+                    ]
+                )),
+                new OA\Response(response: 422, description: 'Duplicate review or validation error'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function store(Request $request, int $productId): JsonResponse
     {
         $product = Product::where('is_active', true)->findOrFail($productId);

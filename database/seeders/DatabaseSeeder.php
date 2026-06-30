@@ -19,15 +19,24 @@ class DatabaseSeeder extends Seeder
     {
         // User::factory(10)->create();
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'phone' => '0987654321',
-            'password' => Hash::make('testuser123'),
-        ]);
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            [
+                'name' => 'Test User',
+                'phone' => '0987654321',
+                'password' => Hash::make('testuser123'),
+            ]
+        );
 
         $this->call([
             AdminSeeder::class,
+            TestDataSeeder::class,
         ]);
+
+        $this->command->info('────────────────────────────────');
+        $this->command->info(' All seeder completed!');
+        $this->command->info(' Admin: admin@example.com / admin123');
+        $this->command->info(' User:  customer1@example.com / password');
+        $this->command->info('────────────────────────────────');
     }
 }

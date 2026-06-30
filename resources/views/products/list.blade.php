@@ -219,6 +219,11 @@
 
             </div>
 
+            <!-- Pagination -->
+            <div class="px-6 py-4 border-t bg-gray-50">
+                {{ $products->links() }}
+            </div>
+
         @else
 
             <!-- Empty State -->

@@ -7,12 +7,28 @@ use App\Models\Cart;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use OpenApi\Attributes as OA;
 
 class CartController extends Controller
 {
-    /**
-     * Get authenticated user's cart.
-     */
+    #[
+        OA\Get(
+            path: '/api/cart',
+            summary: 'Get authenticated user\'s cart',
+            tags: ['Cart'],
+            security: [['sanctum' => []]],
+            responses: [
+                new OA\Response(response: 200, description: 'Cart contents', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/CartItem')),
+                        new OA\Property(property: 'subtotal', type: 'number', format: 'float', example: 159.98),
+                        new OA\Property(property: 'count', type: 'integer', example: 3),
+                    ]
+                )),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function index(Request $request): JsonResponse
     {
         $items = Cart::where('user_id', $request->user()->id)
@@ -29,9 +45,34 @@ class CartController extends Controller
         ]);
     }
 
-    /**
-     * Add a product to cart or increase quantity.
-     */
+    #[
+        OA\Post(
+            path: '/api/cart',
+            summary: 'Add a product to cart or increase quantity',
+            tags: ['Cart'],
+            security: [['sanctum' => []]],
+            requestBody: new OA\RequestBody(
+                required: true,
+                content: new OA\JsonContent(
+                    required: ['product_id', 'quantity'],
+                    properties: [
+                        new OA\Property(property: 'product_id', type: 'integer', example: 1),
+                        new OA\Property(property: 'quantity', type: 'integer', example: 2, minimum: 1, maximum: 100),
+                    ]
+                )
+            ),
+            responses: [
+                new OA\Response(response: 201, description: 'Cart updated', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Cart updated.'),
+                        new OA\Property(property: 'data', ref: '#/components/schemas/CartItem'),
+                    ]
+                )),
+                new OA\Response(response: 422, description: 'Validation error or insufficient stock'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -64,9 +105,36 @@ class CartController extends Controller
         ], 201);
     }
 
-    /**
-     * Update cart item quantity.
-     */
+    #[
+        OA\Patch(
+            path: '/api/cart/{id}',
+            summary: 'Update cart item quantity',
+            tags: ['Cart'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            requestBody: new OA\RequestBody(
+                required: true,
+                content: new OA\JsonContent(
+                    required: ['quantity'],
+                    properties: [
+                        new OA\Property(property: 'quantity', type: 'integer', example: 3, minimum: 1, maximum: 100),
+                    ]
+                )
+            ),
+            responses: [
+                new OA\Response(response: 200, description: 'Quantity updated', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Quantity updated.'),
+                        new OA\Property(property: 'data', ref: '#/components/schemas/CartItem'),
+                    ]
+                )),
+                new OA\Response(response: 404, description: 'Cart item not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function update(Request $request, int $id): JsonResponse
     {
         $validated = $request->validate([
@@ -89,9 +157,22 @@ class CartController extends Controller
         ]);
     }
 
-    /**
-     * Remove a single cart item.
-     */
+    #[
+        OA\Delete(
+            path: '/api/cart/{id}',
+            summary: 'Remove a single cart item',
+            tags: ['Cart'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'id', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Item removed', content: new OA\JsonContent(ref: '#/components/schemas/MessageResponse')),
+                new OA\Response(response: 404, description: 'Cart item not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function destroy(Request $request, int $id): JsonResponse
     {
         $item = Cart::where('user_id', $request->user()->id)->findOrFail($id);
@@ -100,9 +181,18 @@ class CartController extends Controller
         return response()->json(['message' => 'Item removed from cart.']);
     }
 
-    /**
-     * Clear entire cart.
-     */
+    #[
+        OA\Delete(
+            path: '/api/cart',
+            summary: 'Clear entire cart',
+            tags: ['Cart'],
+            security: [['sanctum' => []]],
+            responses: [
+                new OA\Response(response: 200, description: 'Cart cleared', content: new OA\JsonContent(ref: '#/components/schemas/MessageResponse')),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function clear(Request $request): JsonResponse
     {
         Cart::where('user_id', $request->user()->id)->delete();

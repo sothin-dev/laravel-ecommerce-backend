@@ -10,26 +10,70 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use OpenApi\Attributes as OA;
 
 class OrderController extends Controller
 {
-    /**
-     * List the authenticated user's orders.
-     */
+    #[
+        OA\Get(
+            path: '/api/orders',
+            summary: 'List the authenticated user orders',
+            tags: ['Orders'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'per_page', in: 'query', description: 'Items per page (max 50)', required: false, schema: new OA\Schema(type: 'integer', default: 10)),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Paginated list of orders', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Order')),
+                        new OA\Property(property: 'meta', ref: '#/components/schemas/PaginationMeta'),
+                    ]
+                )),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function index(Request $request): JsonResponse
     {
+        $perPage = min((int) $request->get('per_page', 10), 50);
+
         $orders = Order::where('user_id', $request->user()->id)
             ->with('items.product')
             ->latest()
-            ->get()
-            ->map(fn ($o) => $this->formatOrder($o));
+            ->paginate($perPage);
 
-        return response()->json(['data' => $orders]);
+        return response()->json([
+            'data' => $orders->getCollection()->map(fn ($o) => $this->formatOrder($o))->values(),
+            'meta' => [
+                'current_page' => $orders->currentPage(),
+                'last_page'    => $orders->lastPage(),
+                'per_page'     => $orders->perPage(),
+                'total'        => $orders->total(),
+            ],
+        ]);
     }
 
-    /**
-     * Show a single order by order number.
-     */
+    #[
+        OA\Get(
+            path: '/api/orders/{orderNumber}',
+            summary: 'Show a single order by order number',
+            tags: ['Orders'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'orderNumber', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Order detail', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', ref: '#/components/schemas/OrderDetail'),
+                    ]
+                )),
+                new OA\Response(response: 404, description: 'Order not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function show(Request $request, string $orderNumber): JsonResponse
     {
         $order = Order::where('user_id', $request->user()->id)
@@ -40,9 +84,34 @@ class OrderController extends Controller
         return response()->json(['data' => $this->formatOrder($order, detail: true)]);
     }
 
-    /**
-     * Checkout: convert cart to an order.
-     */
+    #[
+        OA\Post(
+            path: '/api/checkout',
+            summary: 'Checkout: convert cart to an order',
+            tags: ['Orders'],
+            security: [['sanctum' => []]],
+            requestBody: new OA\RequestBody(
+                required: true,
+                content: new OA\JsonContent(
+                    required: ['shipping_address', 'payment_method'],
+                    properties: [
+                        new OA\Property(property: 'shipping_address', type: 'string', maxLength: 500, example: '123 Main St, City, Country'),
+                        new OA\Property(property: 'payment_method', type: 'string', enum: ['cash_on_delivery', 'bank_transfer', 'credit_card'], example: 'cash_on_delivery'),
+                    ]
+                )
+            ),
+            responses: [
+                new OA\Response(response: 201, description: 'Order placed successfully', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: 'Order placed successfully.'),
+                        new OA\Property(property: 'data', ref: '#/components/schemas/OrderDetail'),
+                    ]
+                )),
+                new OA\Response(response: 422, description: 'Empty cart or insufficient stock'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
     public function checkout(Request $request): JsonResponse
     {
         $validated = $request->validate([

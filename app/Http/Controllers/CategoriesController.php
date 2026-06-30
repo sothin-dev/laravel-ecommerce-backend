@@ -13,7 +13,7 @@ class CategoriesController extends Controller
      */
     public function index()
     {
-        $categories = Category::all();
+        $categories = Category::with('parent')->latest()->paginate(10);
         return view('categories.category', compact('categories'));
     }
 
@@ -22,7 +22,8 @@ class CategoriesController extends Controller
      */
     public function create()
     {
-        return view('categories.create');
+        $parentCategories = Category::whereNull('parent_id')->with('children')->get();
+        return view('categories.create', compact('parentCategories'));
     }
 
     /**
@@ -35,6 +36,7 @@ class CategoriesController extends Controller
             'slug' => 'required|string|unique:categories,slug',
             'description' => 'required|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'parent_id' => 'nullable|exists:categories,id',
             'is_active' => 'boolean|nullable',
         ]);
 
@@ -48,6 +50,7 @@ class CategoriesController extends Controller
             'slug' => $validated['slug'],
             'description' => $validated['description'],
             'image' => $imagePath,
+            'parent_id' => $validated['parent_id'] ?? null,
             'is_active' => $validated['is_active'] ?? 0,
         ]);
 
@@ -67,9 +70,32 @@ class CategoriesController extends Controller
      */
     public function edit(string $id)
     {
-        $category = Category::findOrFail($id);
+        $category = Category::with('children')->findOrFail($id);
 
-        return view('categories.edit', compact('category'));
+        // Get all categories that can be parents (excluding self and descendants)
+        $excludeIds = $this->getDescendantIds($category);
+        $excludeIds[] = $category->id;
+
+        $parentCategories = Category::whereNull('parent_id')
+            ->whereNotIn('id', $excludeIds)
+            ->with(['children' => fn ($q) => $q->whereNotIn('id', $excludeIds)])
+            ->get();
+
+        return view('categories.edit', compact('category', 'parentCategories'));
+    }
+
+    /**
+     * Recursively collect all descendant IDs of a category.
+     */
+    private function getDescendantIds(Category $category): array
+    {
+        $ids = [];
+        foreach ($category->children as $child) {
+            $ids[] = $child->id;
+            $child->load('children');
+            $ids = array_merge($ids, $this->getDescendantIds($child));
+        }
+        return $ids;
     }
 
     /**
@@ -84,6 +110,7 @@ class CategoriesController extends Controller
             'slug' => 'required|string|max:255|unique:categories,slug,' . $category->id,
             'description' => 'required|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'parent_id' => 'nullable|exists:categories,id|different:' . $category->id,
             'is_active' => 'nullable|boolean',
         ]);
 

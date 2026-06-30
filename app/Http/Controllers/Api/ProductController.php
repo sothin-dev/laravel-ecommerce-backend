@@ -3,32 +3,60 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Category;
 use App\Models\Product;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use OpenApi\Attributes as OA;
 
 class ProductController extends Controller
 {
-    /**
-     * List products with filtering, search, and pagination.
-     *
-     * Query params:
-     *   ?category=slug
-     *   ?search=keyword
-     *   ?min_price=0&max_price=1000
-     *   ?sort=price_asc|price_desc|newest|name|on_sale
-     *   ?per_page=16
-     */
+    #[
+        OA\Get(
+            path: '/api/products',
+            summary: 'List products with filtering, search, and pagination',
+            tags: ['Products'],
+            parameters: [
+                new OA\Parameter(name: 'category', in: 'query', description: 'Filter by category slug', required: false, schema: new OA\Schema(type: 'string')),
+                new OA\Parameter(name: 'search', in: 'query', description: 'Search by keyword (name, description, SKU)', required: false, schema: new OA\Schema(type: 'string')),
+                new OA\Parameter(name: 'min_price', in: 'query', description: 'Minimum price filter', required: false, schema: new OA\Schema(type: 'number', format: 'float')),
+                new OA\Parameter(name: 'max_price', in: 'query', description: 'Maximum price filter', required: false, schema: new OA\Schema(type: 'number', format: 'float')),
+                new OA\Parameter(name: 'sort', in: 'query', description: 'Sort order', required: false, schema: new OA\Schema(type: 'string', enum: ['price_asc', 'price_desc', 'newest', 'name', 'on_sale'])),
+                new OA\Parameter(name: 'per_page', in: 'query', description: 'Items per page (max 50)', required: false, schema: new OA\Schema(type: 'integer', default: 16)),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Paginated list of products', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', type: 'array', items: new OA\Items(ref: '#/components/schemas/Product')),
+                        new OA\Property(property: 'meta', ref: '#/components/schemas/PaginationMeta'),
+                    ]
+                )),
+            ]
+        )
+    ]
     public function index(Request $request): JsonResponse
     {
         $query = Product::with(['category', 'images'])
             ->where('is_active', true);
 
-        // Category filter
+        // Category filter — include child categories
         if ($request->filled('category')) {
-            $query->whereHas('category', fn ($q) =>
-                $q->where('slug', $request->category)->where('is_active', true)
-            );
+            $category = Category::where('slug', $request->category)
+                ->where('is_active', true)
+                ->with('children')
+                ->first();
+
+            if ($category) {
+                $categoryIds = collect([$category->id]);
+
+                foreach ($category->children as $child) {
+                    $categoryIds->push($child->id);
+                }
+
+                $query->whereIn('category_id', $categoryIds);
+            } else {
+                $query->whereNull('id'); // no results
+            }
         }
 
         // Search
@@ -77,9 +105,24 @@ class ProductController extends Controller
         ]);
     }
 
-    /**
-     * Show product detail by slug.
-     */
+    #[
+        OA\Get(
+            path: '/api/products/{slug}',
+            summary: 'Show product detail by slug',
+            tags: ['Products'],
+            parameters: [
+                new OA\Parameter(name: 'slug', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Product detail', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'data', ref: '#/components/schemas/ProductDetail'),
+                    ]
+                )),
+                new OA\Response(response: 404, description: 'Product not found'),
+            ]
+        )
+    ]
     public function show(string $slug): JsonResponse
     {
         $product = Product::with(['category', 'images', 'reviews.user'])

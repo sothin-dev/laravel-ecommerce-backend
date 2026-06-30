@@ -14,7 +14,7 @@ class ProductController extends Controller
      */
     public function index()
     {
-        $products = Product::all();
+        $products = Product::with('category')->latest()->paginate(10);
         return view('products.list', compact('products'));
     }
 
@@ -33,7 +33,7 @@ class ProductController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'category_id' => 'required',
+            'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
             'slug' => 'required|string|unique:products,slug',
             'description' => 'required|string',
@@ -91,6 +91,7 @@ class ProductController extends Controller
         $product = Product::findOrFail($id);
 
         $validated = $request->validate([
+            'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
             'slug' => 'required|string|max:255|unique:categories,slug,' . $product->id,
             'description' => 'required|string',

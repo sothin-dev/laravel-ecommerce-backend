@@ -170,6 +170,11 @@
                     </table>
 
                 </div>
+
+                <!-- Pagination -->
+                <div class="px-6 py-4 border-t bg-gray-50">
+                    {{ $categories->links() }}
+                </div>
             @else
                 <!-- Empty State -->
                 <div class="py-20 text-center">

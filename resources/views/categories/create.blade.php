@@ -62,6 +62,10 @@
                             <input type="text" name="slug" value="{{ old('slug') }}"
                                 class="w-full px-4 py-3 border rounded-xl focus:ring-2 focus:ring-blue-500"
                                 placeholder="electronics">
+
+                            @error('slug')
+                                <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                            @enderror
                         </div>
 
                     </div>
@@ -74,15 +78,71 @@
 
                         <textarea rows="3" name="description" class="w-full px-4 py-3 border rounded-xl resize-none"
                             placeholder="Write description...">{{ old('description') }}</textarea>
+
+                        @error('description')
+                            <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
+
+                    <!-- Parent Category -->
+                    <div class="mt-6">
+                        <label class="block mb-2 font-medium text-gray-700">
+                            Parent Category <span class="text-gray-400 text-sm font-normal">(optional)</span>
+                        </label>
+
+                        @if ($parentCategories->isNotEmpty())
+                            <div class="border rounded-xl overflow-hidden">
+                                <div class="max-h-56 overflow-y-auto divide-y divide-gray-100" x-data="{ selected: '{{ old('parent_id', '') }}' }">
+                                    <label class="flex items-center px-4 py-3 cursor-pointer hover:bg-blue-50 transition-colors {{ old('parent_id') == '' ? 'bg-blue-50' : '' }}">
+                                        <input type="radio" name="parent_id" value=""
+                                            class="w-4 h-4 text-blue-600" @checked(old('parent_id') == '' || old('parent_id') === null)>
+                                        <span class="ml-3 text-gray-500 font-medium">— None (Top Level) —</span>
+                                    </label>
+
+                                    @foreach ($parentCategories as $parent)
+                                        <label class="flex items-center px-4 py-3 cursor-pointer hover:bg-blue-50 transition-colors {{ old('parent_id') == $parent->id ? 'bg-blue-50' : '' }}">
+                                            <input type="radio" name="parent_id" value="{{ $parent->id }}"
+                                                class="w-4 h-4 text-blue-600" @checked(old('parent_id') == $parent->id)>
+                                            <span class="ml-3 font-medium text-gray-800">{{ $parent->name }}</span>
+                                        </label>
+
+                                        @if ($parent->children && $parent->children->isNotEmpty())
+                                            @foreach ($parent->children as $child)
+                                                <label class="flex items-center px-4 py-3 pl-12 cursor-pointer hover:bg-blue-50 transition-colors {{ old('parent_id') == $child->id ? 'bg-blue-50' : '' }}">
+                                                    <input type="radio" name="parent_id" value="{{ $child->id }}"
+                                                        class="w-4 h-4 text-blue-600" @checked(old('parent_id') == $child->id)>
+                                                    <span class="ml-3 text-gray-700">↳ {{ $child->name }}</span>
+                                                </label>
+                                            @endforeach
+                                        @endif
+                                    @endforeach
+                                </div>
+                            </div>
+                        @else
+                            <p class="text-sm text-gray-400 italic px-1">No parent categories available yet. This will be a top-level category.</p>
+                            <input type="hidden" name="parent_id" value="">
+                        @endif
+
+                        @error('parent_id')
+                            <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                        @enderror
+
+                        <p class="text-xs text-gray-400 mt-2 flex items-center gap-1">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            Select a parent category to create a subcategory (e.g., Ball → Football). Leave as "None" for a top-level category.
+                        </p>
                     </div>
 
                     <!-- Image -->
                     <label class="block">
                         <span class="block mb-2 font-medium text-gray-700">
-                            Category Image
+                            Category Image <span class="text-gray-400 text-sm font-normal">(optional)</span>
                         </span>
 
-                        <div class="border-2 border-dashed rounded-xl p-6 text-center hover:bg-gray-50 cursor-pointer">
+                        <div class="border-2 border-dashed rounded-xl p-6 text-center hover:bg-gray-50 cursor-pointer"
+                            onclick="this.querySelector('input[type=file]').click()">
 
                             <svg class="w-8 h-8 mx-auto text-gray-400" fill="none" stroke="currentColor"
                                 viewBox="0 0 24 24">
@@ -94,8 +154,13 @@
                                 Click to upload image
                             </p>
 
-                            <input type="file" name="image" class="hidden" accept="image/*">
+                            <input type="file" name="image" class="hidden" accept="image/*"
+                                onchange="this.closest('div').querySelector('p').textContent = this.files[0].name">
                         </div>
+
+                        @error('image')
+                            <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
+                        @enderror
                     </label>
 
                     <!-- Status -->

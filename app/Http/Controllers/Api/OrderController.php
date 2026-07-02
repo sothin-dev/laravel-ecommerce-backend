@@ -182,6 +182,79 @@ class OrderController extends Controller
         ], 201);
     }
 
+    #[
+        OA\Post(
+            path: '/api/orders/{orderNumber}/reorder',
+            summary: 'Reorder: add all items from a past order to the cart',
+            tags: ['Orders'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'orderNumber', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Items added to cart', content: new OA\JsonContent(
+                    properties: [
+                        new OA\Property(property: 'message', type: 'string', example: '3 item(s) added to your cart.'),
+                    ]
+                )),
+                new OA\Response(response: 404, description: 'Order not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
+    public function reorder(Request $request, string $orderNumber): JsonResponse
+    {
+        $order = Order::where('user_id', $request->user()->id)
+            ->where('order_number', $orderNumber)
+            ->with('items.product')
+            ->firstOrFail();
+
+        $added   = 0;
+        $skipped = 0;
+
+        foreach ($order->items as $item) {
+            $product = $item->product;
+
+            if (!$product || !$product->is_active || $product->stock < 1) {
+                $skipped++;
+                continue;
+            }
+
+            $cartItem = Cart::where('user_id', $request->user()->id)
+                ->where('product_id', $product->id)
+                ->first();
+
+            $newQty = ($cartItem ? $cartItem->quantity : 0) + $item->quantity;
+
+            // Cap at available stock
+            $newQty = min($newQty, $product->stock);
+
+            if ($newQty < 1) {
+                $skipped++;
+                continue;
+            }
+
+            Cart::updateOrCreate(
+                ['user_id' => $request->user()->id, 'product_id' => $product->id],
+                ['quantity' => $newQty]
+            );
+
+            $added++;
+        }
+
+        $parts = [];
+        if ($added > 0) {
+            $parts[] = "{$added} item(s) added to your cart";
+        }
+        if ($skipped > 0) {
+            $parts[] = "{$skipped} item(s) skipped (unavailable or out of stock)";
+        }
+
+        $message = $parts ? implode('. ', $parts) . '.' : 'No items could be added to your cart.';
+
+        return response()->json(['message' => $message]);
+    }
+
     /**
      * Format an order for response.
      */

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\Order;
 use App\Models\Product;
+use App\Models\Review;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -125,12 +127,35 @@ class ProductController extends Controller
     ]
     public function show(string $slug): JsonResponse
     {
-        $product = Product::with(['category', 'images', 'reviews.user'])
+        $product = Product::with(['category', 'images', 'reviews.user', 'variants'])
             ->where('slug', $slug)
             ->where('is_active', true)
             ->firstOrFail();
 
         $approvedReviews = $product->reviews->where('is_approved', true);
+
+        $purchased = false;
+        $myReview = null;
+
+        if ($request->user()) {
+            $purchased = Order::where('user_id', $request->user()->id)
+                ->where('status', '!=', 'cancelled')
+                ->whereHas('items', fn ($q) => $q->where('product_id', $product->id))
+                ->exists();
+
+            $my = Review::where('user_id', $request->user()->id)
+                ->where('product_id', $product->id)
+                ->first();
+
+            if ($my) {
+                $myReview = [
+                    'id'          => $my->id,
+                    'rating'      => $my->rating,
+                    'comment'     => $my->comment,
+                    'is_approved' => (bool) $my->is_approved,
+                ];
+            }
+        }
 
         return response()->json([
             'data' => [
@@ -152,6 +177,16 @@ class ProductController extends Controller
                 ])->values(),
                 'avg_rating'   => $approvedReviews->count() ? round($approvedReviews->avg('rating'), 1) : null,
                 'review_count' => $approvedReviews->count(),
+                'variants'     => $product->variants->map(fn ($v) => [
+                    'id'    => $v->id,
+                    'type'  => $v->type,
+                    'value' => $v->value,
+                    'sku'   => $v->sku,
+                    'price' => $v->price ? (float) $v->price : null,
+                    'stock' => $v->stock,
+                ]),
+                'purchased'    => $purchased,
+                'my_review'    => $myReview,
             ],
         ]);
     }

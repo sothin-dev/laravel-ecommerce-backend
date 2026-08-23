@@ -37,12 +37,18 @@ class ProductController extends Controller
             'name' => 'required|string|max:255',
             'slug' => 'required|string|unique:products,slug',
             'description' => 'required|string',
-            'price' => 'required',
-            'sale_price' => 'required',
-            'stock' => 'required',
-            'sku' => 'required|string|unique:products,sku',
+            'price' => 'required|numeric|min:0',
+            'sale_price' => 'nullable|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'sku' => 'required|string|max:255|unique:products,sku',
             'is_active' => 'boolean',
             'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'variants' => 'nullable|array',
+            'variants.*.type' => 'required_with:variants|string|max:50',
+            'variants.*.value' => 'required_with:variants|string|max:100',
+            'variants.*.sku' => 'nullable|string|max:100',
+            'variants.*.price' => 'nullable|numeric|min:0',
+            'variants.*.stock' => 'required_with:variants|integer|min:0',
         ]);
 
         $imagePath = null;
@@ -50,9 +56,8 @@ class ProductController extends Controller
             $imagePath = $request->file('image')
                 ->store('products', 'public');
         }
-        // dd($imagePath);
 
-        Product::create([
+        $product = Product::create([
             'category_id' => $validated['category_id'],
             'name' => $validated['name'],
             'slug' => $validated['slug'],
@@ -64,6 +69,8 @@ class ProductController extends Controller
             'is_active' => $validated['is_active'],
             'image' => $imagePath,
         ]);
+
+        $this->syncVariants($product, $request);
 
         return redirect()->route('products.index');
     }
@@ -93,14 +100,20 @@ class ProductController extends Controller
         $validated = $request->validate([
             'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
-            'slug' => 'required|string|max:255|unique:categories,slug,' . $product->id,
+            'slug' => 'required|string|max:255|unique:products,slug,' . $product->id,
             'description' => 'required|string',
-            'price' => 'required',
-            'sale_price' => 'required',
-            'stock' => 'required',
-            'sku' => 'required|string|unique:products,sku',
+            'price' => 'required|numeric|min:0',
+            'sale_price' => 'nullable|numeric|min:0',
+            'stock' => 'required|integer|min:0',
+            'sku' => 'required|string|max:255|unique:products,sku,' . $product->id,
             'is_active' => 'nullable|boolean',
-            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048'
+            'image' => 'nullable|image|mimes:jpg,jpeg,png,webp|max:2048',
+            'variants' => 'nullable|array',
+            'variants.*.type' => 'required_with:variants|string|max:50',
+            'variants.*.value' => 'required_with:variants|string|max:100',
+            'variants.*.sku' => 'nullable|string|max:100',
+            'variants.*.price' => 'nullable|numeric|min:0',
+            'variants.*.stock' => 'required_with:variants|integer|min:0',
         ]);
 
         // Handle image upload
@@ -116,12 +129,13 @@ class ProductController extends Controller
                 ->store('products', 'public');
         }
 
-
         // Handle checkbox
         $validated['is_active'] = $request->boolean('is_active');
 
         // Update category
         $product->update($validated);
+
+        $this->syncVariants($product, $request);
 
         return redirect()
             ->route('products.index')
@@ -129,18 +143,30 @@ class ProductController extends Controller
     }
 
     /**
-     * Remove the specified resource from storage.
+     * Sync product variants from the request.
+     * Only runs when a "variants" input is present (so edits without variants keep existing ones).
      */
-    public function destroy(string $id)
+    private function syncVariants(Product $product, Request $request): void
     {
-        $product = Product::findOrFail($id);
-
-        if ($product->image) {
-            Storage::disk('public')->delete($product->image);
+        if (! $request->has('variants')) {
+            return;
         }
 
-        $product->delete();
+        $product->variants()->delete();
 
-        return redirect()->route('products.index');
+        foreach ((array) $request->input('variants', []) as $index => $variant) {
+            if (empty($variant['type']) && empty($variant['value'])) {
+                continue;
+            }
+
+            $product->variants()->create([
+                'type'       => $variant['type'] ?? '',
+                'value'      => $variant['value'] ?? '',
+                'sku'        => $variant['sku'] ?? null,
+                'price'      => $variant['price'] !== null && $variant['price'] !== '' ? $variant['price'] : null,
+                'stock'      => (int) ($variant['stock'] ?? 0),
+                'sort_order' => (int) $index,
+            ]);
+        }
     }
 }

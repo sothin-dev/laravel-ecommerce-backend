@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
+use App\Models\Coupon;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\JsonResponse;
@@ -117,6 +118,7 @@ class OrderController extends Controller
         $validated = $request->validate([
             'shipping_address' => 'required|string|max:500',
             'payment_method'   => 'required|string|in:cash_on_delivery,bank_transfer,credit_card',
+            'coupon_code'      => 'nullable|string|max:50',
         ]);
 
         $userId    = $request->user()->id;
@@ -135,13 +137,35 @@ class OrderController extends Controller
             }
         }
 
-        $order = DB::transaction(function () use ($cartItems, $userId, $validated) {
+        // Resolve coupon (if provided)
+        $coupon      = null;
+        $discount    = 0;
+        $couponCode  = trim($validated['coupon_code'] ?? '');
 
+        if ($couponCode !== '') {
+            $coupon = Coupon::where('code', strtoupper($couponCode))->first();
+
+            if (! $coupon) {
+                return response()->json(['message' => 'Invalid coupon code.'], 422);
+            }
+
+            $evaluation = $coupon->evaluate((float) $cartItems->sum(
+                fn ($item) => ($item->product->sale_price ?? $item->product->price) * $item->quantity
+            ), $request->user());
+
+            if (! $evaluation['valid']) {
+                return response()->json(['message' => $evaluation['message']], 422);
+            }
+
+            $discount = $evaluation['discount'];
+        }
+
+        $order = DB::transaction(function () use ($cartItems, $userId, $validated, $discount, $coupon) {
             $subtotal = $cartItems->sum(fn ($item) =>
                 ($item->product->sale_price ?? $item->product->price) * $item->quantity
             );
             $shippingFee = $subtotal >= 50 ? 0 : 5; // free shipping over $50
-            $total       = $subtotal + $shippingFee;
+            $total       = max(0, $subtotal + $shippingFee - $discount);
 
             $order = Order::create([
                 'user_id'          => $userId,
@@ -149,6 +173,8 @@ class OrderController extends Controller
                 'status'           => 'pending',
                 'subtotal'         => $subtotal,
                 'shipping_fee'     => $shippingFee,
+                'discount_amount'  => $discount,
+                'coupon_id'        => $coupon?->id,
                 'total'            => $total,
                 'shipping_address' => $validated['shipping_address'],
                 'payment_method'   => $validated['payment_method'],
@@ -161,13 +187,27 @@ class OrderController extends Controller
                 OrderItem::create([
                     'order_id'   => $order->id,
                     'product_id' => $item->product_id,
+                    'variant_id' => $item->variant_id,
                     'quantity'   => $item->quantity,
                     'unit_price' => $unitPrice,
                     'subtotal'   => $unitPrice * $item->quantity,
                 ]);
 
                 // Decrease stock
-                $item->product->decrement('stock', $item->quantity);
+                if ($item->variant_id) {
+                    $item->variant->decrement('stock', $item->quantity);
+                } else {
+                    $item->product->decrement('stock', $item->quantity);
+                }
+            }
+
+            // Record coupon usage
+            if ($coupon) {
+                $coupon->usages()->create([
+                    'user_id'  => $userId,
+                    'order_id' => $order->id,
+                ]);
+                $coupon->increment('used_count');
             }
 
             // Clear cart
@@ -255,6 +295,52 @@ class OrderController extends Controller
         return response()->json(['message' => $message]);
     }
 
+    #[
+        OA\Post(
+            path: '/api/orders/{orderNumber}/cancel',
+            summary: 'Cancel an order (only when pending)',
+            tags: ['Orders'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'orderNumber', in: 'path', required: true, schema: new OA\Schema(type: 'string')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Order cancelled'),
+                new OA\Response(response: 422, description: 'Order cannot be cancelled'),
+                new OA\Response(response: 404, description: 'Order not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
+    public function cancel(Request $request, string $orderNumber): JsonResponse
+    {
+        $order = Order::where('user_id', $request->user()->id)
+            ->where('order_number', $orderNumber)
+            ->with('items.product')
+            ->firstOrFail();
+
+        if (! in_array($order->status, ['pending', 'confirmed', 'processing'])) {
+            return response()->json([
+                'message' => 'This order can no longer be cancelled.',
+            ], 422);
+        }
+
+        DB::transaction(function () use ($order) {
+            foreach ($order->items as $item) {
+                if ($item->product) {
+                    $item->product->increment('stock', $item->quantity);
+                }
+            }
+
+            $order->update(['status' => 'cancelled']);
+        });
+
+        return response()->json([
+            'message' => 'Order cancelled successfully.',
+            'data'    => $this->formatOrder($order->load('items.product'), detail: true),
+        ]);
+    }
+
     /**
      * Format an order for response.
      */
@@ -268,6 +354,8 @@ class OrderController extends Controller
             'payment_method'   => $order->payment_method,
             'subtotal'         => (float) $order->subtotal,
             'shipping_fee'     => (float) $order->shipping_fee,
+            'discount'         => (float) $order->discount_amount,
+            'coupon_code'      => $order->coupon?->code,
             'total'            => (float) $order->total,
             'shipping_address' => $order->shipping_address,
             'created_at'       => $order->created_at->toDateTimeString(),
@@ -285,6 +373,10 @@ class OrderController extends Controller
                 'unit_price' => (float) $item->unit_price,
                 'quantity'   => $item->quantity,
                 'subtotal'   => (float) $item->subtotal,
+                'variant'    => $item->variant ? [
+                    'type'  => $item->variant->type,
+                    'value' => $item->variant->value,
+                ] : null,
             ]);
         } else {
             $base['items_count'] = $order->items->sum('quantity');

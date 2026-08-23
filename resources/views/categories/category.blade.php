@@ -152,12 +152,11 @@
 
                                             </a>
 
-                                            <button
-                                                onclick="document.getElementById('deleteModal').classList.remove('hidden')"
+                                            <button type="button"
+                                                onclick="openConfirmDelete('{{ route('categories.destroy', $category->id) }}', 'Delete Category', 'Are you sure you want to delete this category? This action cannot be undone.')"
                                                 class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600">
                                                 Delete
                                             </button>
-                                            @include('categories.delete', ['category' => $category])
                                         </div>
 
                                     </td>
@@ -199,5 +198,7 @@
         </div>
 
     </div>
+
+    @include('partials.confirm-modal')
 
 @endsection

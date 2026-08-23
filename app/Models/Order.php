@@ -13,7 +13,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
     'status',
     'subtotal',
     'shipping_fee',
+    'discount_amount',
     'total',
+    'coupon_id',
     'shipping_address',
     'payment_method',
     'payment_status',
@@ -28,15 +30,21 @@ class Order extends Model
     protected function casts(): array
     {
         return [
-            'subtotal' => 'decimal:2',
-            'shipping_fee' => 'decimal:2',
-            'total' => 'decimal:2',
+            'subtotal'        => 'decimal:2',
+            'shipping_fee'    => 'decimal:2',
+            'discount_amount' => 'decimal:2',
+            'total'           => 'decimal:2',
         ];
     }
 
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    public function coupon(): BelongsTo
+    {
+        return $this->belongsTo(Coupon::class);
     }
 
     public function items(): HasMany

@@ -97,7 +97,15 @@ class AuthController extends Controller
         }
 
         /** @var User $user */
-        $user  = Auth::user();
+        $user = Auth::user();
+
+        if (! $user->is_active) {
+            Auth::logout();
+            return response()->json([
+                'message' => 'Your account has been disabled. Please contact support.',
+            ], 403);
+        }
+
         $token = $user->createToken('api-token')->plainTextToken;
 
         return response()->json([

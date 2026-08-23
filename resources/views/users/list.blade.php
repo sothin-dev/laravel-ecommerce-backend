@@ -51,6 +51,10 @@
                                 </th>
 
                                 <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">
+                                    Account
+                                </th>
+
+                                <th class="px-6 py-4 text-left text-sm font-semibold text-gray-600">
                                     Joined
                                 </th>
 
@@ -122,6 +126,21 @@
 
                                     </td>
 
+                                    <!-- Account Status -->
+                                    <td class="px-6 py-4">
+
+                                        @if ($user->is_active)
+                                            <span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm">
+                                                Active
+                                            </span>
+                                        @else
+                                            <span class="px-3 py-1 bg-red-100 text-red-700 rounded-full text-sm">
+                                                Disabled
+                                            </span>
+                                        @endif
+
+                                    </td>
+
                                     <!-- Joined -->
                                     <td class="px-6 py-4 text-sm text-gray-500">
                                         {{ $user->created_at->format('d M Y') }}
@@ -136,6 +155,14 @@
                                                 class="px-4 py-2 border rounded-lg hover:bg-gray-100">
                                                 View
                                             </a>
+
+                                            <form action="{{ route('users.toggleStatus', $user->id) }}" method="POST">
+                                                @csrf
+                                                <button type="submit"
+                                                    class="px-4 py-2 rounded-lg {{ $user->is_active ? 'bg-amber-500 text-white hover:bg-amber-600' : 'bg-green-600 text-white hover:bg-green-700' }}">
+                                                    {{ $user->is_active ? 'Disable' : 'Activate' }}
+                                                </button>
+                                            </form>
 
                                         </div>
 

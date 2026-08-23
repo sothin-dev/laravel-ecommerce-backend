@@ -18,7 +18,14 @@
 
             <div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
                 <div class="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
-                <form class="space-y-6" action="/login" method="POST">
+                @if ($errors->any())
+                    <div class="mb-4 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-700">
+                        {{ $errors->first() }}
+                    </div>
+                @endif
+
+                <form class="space-y-6" action="{{ route('admin.login.submit') }}" method="POST">
+                    @csrf
                     <div>
                     <label for="email" class="block text-sm font-medium text-gray-700">
                         Email address
@@ -49,7 +56,7 @@
                     </div>
 
                     <div class="text-sm">
-                        <a href="#" class="font-medium text-indigo-650 hover:text-indigo-500">
+                        <a href="/forgot-password" class="font-medium text-indigo-650 hover:text-indigo-500">
                         Forgot your password?
                         </a>
                     </div>

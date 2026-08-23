@@ -211,6 +211,17 @@
                     accept="image/*">
             </div>
 
+            <!-- Variants -->
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <label class="block font-medium text-gray-700">Product Variants (optional)</label>
+                    <button type="button" onclick="addVariantRow()"
+                        class="text-sm px-3 py-1.5 bg-gray-100 rounded-lg hover:bg-gray-200">+ Add Variant</button>
+                </div>
+                <p class="text-xs text-gray-400 mb-2">e.g. Size / Color. Leave a row blank to ignore it.</p>
+                <div id="variant-rows" class="space-y-2"></div>
+            </div>
+
             <!-- Status -->
             <div class="flex items-center gap-3">
                 <input type="checkbox"
@@ -239,10 +250,33 @@
 
             </div>
 
-        </form>
+            </form>
+
+        </div>
 
     </div>
 
-</div>
+    <script>
+        let vIdx = 0;
+        function addVariantRow(type = '', value = '', sku = '', price = '', stock = '') {
+            const html = `
+                <div class="grid grid-cols-12 gap-2 items-end">
+                    <input name="variants[${vIdx}][type]" value="${type}" placeholder="Type (e.g. Size)"
+                        class="col-span-3 px-3 py-2 border rounded-lg text-sm">
+                    <input name="variants[${vIdx}][value]" value="${value}" placeholder="Value (e.g. Large)"
+                        class="col-span-3 px-3 py-2 border rounded-lg text-sm">
+                    <input name="variants[${vIdx}][sku]" value="${sku}" placeholder="SKU"
+                        class="col-span-2 px-3 py-2 border rounded-lg text-sm">
+                    <input name="variants[${vIdx}][price]" value="${price}" type="number" step="0.01" placeholder="Price"
+                        class="col-span-2 px-3 py-2 border rounded-lg text-sm">
+                    <input name="variants[${vIdx}][stock]" value="${stock}" type="number" placeholder="Stock"
+                        class="col-span-1 px-3 py-2 border rounded-lg text-sm">
+                    <button type="button" onclick="this.parentElement.remove()"
+                        class="col-span-1 px-2 py-2 bg-red-100 text-red-600 rounded-lg text-sm hover:bg-red-200">✕</button>
+                </div>`;
+            document.getElementById('variant-rows').insertAdjacentHTML('beforeend', html);
+            vIdx++;
+        }
+    </script>
 
 @endsection

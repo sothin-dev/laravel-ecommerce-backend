@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\CouponController;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ProfileController;
@@ -59,8 +60,14 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/orders/{orderNumber}', [OrderController::class, 'show']);
     Route::post('/checkout', [OrderController::class, 'checkout']);
     Route::post('/orders/{orderNumber}/reorder', [OrderController::class, 'reorder']);
+    Route::post('/orders/{orderNumber}/cancel', [OrderController::class, 'cancel']);
+
+    // Coupons
+    Route::post('/coupon/validate', [CouponController::class, 'validate']);
 
     // Reviews
     Route::get('/products/{productId}/reviews', [ReviewController::class, 'index']);
     Route::post('/products/{productId}/reviews', [ReviewController::class, 'store']);
+    Route::put('/products/{productId}/reviews/{reviewId}', [ReviewController::class, 'update']);
+    Route::delete('/products/{productId}/reviews/{reviewId}', [ReviewController::class, 'destroy']);
 });

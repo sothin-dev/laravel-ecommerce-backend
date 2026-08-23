@@ -52,13 +52,21 @@
                             <span class="px-3 py-1 rounded-full text-sm bg-yellow-100 text-yellow-700">
                                 Pending
                             </span>
+                        @elseif($order->status == 'confirmed')
+                            <span class="px-3 py-1 rounded-full text-sm bg-indigo-100 text-indigo-700">
+                                Confirmed
+                            </span>
                         @elseif($order->status == 'processing')
                             <span class="px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-700">
                                 Processing
                             </span>
-                        @elseif($order->status == 'completed')
+                        @elseif($order->status == 'shipped')
+                            <span class="px-3 py-1 rounded-full text-sm bg-purple-100 text-purple-700">
+                                Shipped
+                            </span>
+                        @elseif($order->status == 'delivered')
                             <span class="px-3 py-1 rounded-full text-sm bg-green-100 text-green-700">
-                                Completed
+                                Delivered
                             </span>
                         @else
                             <span class="px-3 py-1 rounded-full text-sm bg-red-100 text-red-700">
@@ -90,6 +98,27 @@
                             {{ $order->created_at->format('d M Y, h:i A') }}
                         </span>
                     </div>
+
+                    <!-- Status update -->
+                    <form action="{{ route('orders.updateStatus', $order->id) }}" method="POST" class="pt-3 border-t mt-3">
+                        @csrf
+                        <label class="block mb-1 text-xs font-semibold text-gray-500 uppercase tracking-wider">Update Status</label>
+                        <div class="flex gap-2">
+                            <select name="status"
+                                class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 text-sm">
+                                <option value="pending" {{ $order->status == 'pending' ? 'selected' : '' }}>Pending</option>
+                                <option value="confirmed" {{ $order->status == 'confirmed' ? 'selected' : '' }}>Confirmed</option>
+                                <option value="processing" {{ $order->status == 'processing' ? 'selected' : '' }}>Processing</option>
+                                <option value="shipped" {{ $order->status == 'shipped' ? 'selected' : '' }}>Shipped</option>
+                                <option value="delivered" {{ $order->status == 'delivered' ? 'selected' : '' }}>Delivered</option>
+                                <option value="cancelled" {{ $order->status == 'cancelled' ? 'selected' : '' }}>Cancelled</option>
+                            </select>
+                            <button type="submit"
+                                class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium">
+                                Save
+                            </button>
+                        </div>
+                    </form>
                 </div>
             </div>
 

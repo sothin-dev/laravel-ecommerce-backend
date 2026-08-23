@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Product;
+use App\Models\ProductVariant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use OpenApi\Attributes as OA;
@@ -32,7 +33,7 @@ class CartController extends Controller
     public function index(Request $request): JsonResponse
     {
         $items = Cart::where('user_id', $request->user()->id)
-            ->with('product')
+            ->with('product', 'variant')
             ->get();
 
         $formatted = $items->map(fn ($c) => $this->formatCartItem($c));
@@ -57,6 +58,7 @@ class CartController extends Controller
                     required: ['product_id', 'quantity'],
                     properties: [
                         new OA\Property(property: 'product_id', type: 'integer', example: 1),
+                        new OA\Property(property: 'variant_id', type: 'integer', example: null, nullable: true),
                         new OA\Property(property: 'quantity', type: 'integer', example: 2, minimum: 1, maximum: 100),
                     ]
                 )
@@ -77,31 +79,48 @@ class CartController extends Controller
     {
         $validated = $request->validate([
             'product_id' => 'required|integer|exists:products,id',
+            'variant_id' => 'nullable|integer|exists:product_variants,id',
             'quantity'   => 'required|integer|min:1|max:100',
         ]);
 
         $product = Product::where('is_active', true)->findOrFail($validated['product_id']);
 
+        $variant = null;
+        if (! empty($validated['variant_id'])) {
+            $variant = $product->variants()->where('id', $validated['variant_id'])->first();
+
+            if (! $variant) {
+                return response()->json(['message' => 'The selected variant is invalid.'], 422);
+            }
+        }
+
+        $availableStock = $variant ? $variant->stock : $product->stock;
+
         $item = Cart::where('user_id', $request->user()->id)
             ->where('product_id', $product->id)
+            ->where('variant_id', $variant?->id)
             ->first();
 
         $newQty = ($item ? $item->quantity : 0) + $validated['quantity'];
 
-        if ($newQty > $product->stock) {
+        if ($newQty > $availableStock) {
             return response()->json([
-                'message' => "Only {$product->stock} items in stock.",
+                'message' => "Only {$availableStock} item(s) in stock.",
             ], 422);
         }
 
         $item = Cart::updateOrCreate(
-            ['user_id' => $request->user()->id, 'product_id' => $product->id],
+            [
+                'user_id'    => $request->user()->id,
+                'product_id' => $product->id,
+                'variant_id' => $variant?->id,
+            ],
             ['quantity' => $newQty]
         );
 
         return response()->json([
             'message' => 'Cart updated.',
-            'data'    => $this->formatCartItem($item->load('product')),
+            'data'    => $this->formatCartItem($item->load('product', 'variant')),
         ], 201);
     }
 
@@ -143,9 +162,11 @@ class CartController extends Controller
 
         $item = Cart::where('user_id', $request->user()->id)->findOrFail($id);
 
-        if ($validated['quantity'] > $item->product->stock) {
+        $availableStock = $item->variant ? $item->variant->stock : $item->product->stock;
+
+        if ($validated['quantity'] > $availableStock) {
             return response()->json([
-                'message' => "Only {$item->product->stock} items in stock.",
+                'message' => "Only {$availableStock} item(s) in stock.",
             ], 422);
         }
 
@@ -153,7 +174,7 @@ class CartController extends Controller
 
         return response()->json([
             'message' => 'Quantity updated.',
-            'data'    => $this->formatCartItem($item->load('product')),
+            'data'    => $this->formatCartItem($item->load('product', 'variant')),
         ]);
     }
 
@@ -205,21 +226,26 @@ class CartController extends Controller
      */
     private function formatCartItem(Cart $item): array
     {
-        $price    = $item->product->sale_price ?? $item->product->price;
-        $subtotal = (float) $price * $item->quantity;
+        $basePrice = $item->product->sale_price ?? $item->product->price;
+        $price     = ($item->variant && $item->variant->price) ? $item->variant->price : $basePrice;
+        $subtotal  = (float) $price * $item->quantity;
 
         return [
             'id'         => $item->id,
             'product_id' => $item->product_id,
+            'variant_id' => $item->variant_id,
             'name'       => $item->product->name,
             'slug'       => $item->product->slug,
-            'image_url'  => $item->product->image
-                ? asset('storage/' . $item->product->image)
-                : null,
+            'image_url'  => $item->product->image ? asset('storage/' . $item->product->image) : null,
             'price'      => (float) $price,
             'quantity'   => $item->quantity,
             'subtotal'   => round($subtotal, 2),
-            'stock'      => $item->product->stock,
+            'stock'      => $item->variant ? $item->variant->stock : $item->product->stock,
+            'variant'    => $item->variant ? [
+                'id'    => $item->variant->id,
+                'type'  => $item->variant->type,
+                'value' => $item->variant->value,
+            ] : null,
         ];
     }
 }

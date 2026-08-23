@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Review;
 use Illuminate\Http\JsonResponse;
@@ -103,6 +104,18 @@ class ReviewController extends Controller
 
         $userId = $request->user()->id;
 
+        // Only customers who purchased the product may review it.
+        $hasPurchased = Order::where('user_id', $userId)
+            ->where('status', '!=', 'cancelled')
+            ->whereHas('items', fn ($q) => $q->where('product_id', $productId))
+            ->exists();
+
+        if (! $hasPurchased) {
+            return response()->json([
+                'message' => 'You can only review products you have purchased.',
+            ], 403);
+        }
+
         // Prevent duplicate review per user per product
         $existing = Review::where('user_id', $userId)
             ->where('product_id', $productId)
@@ -131,5 +144,81 @@ class ReviewController extends Controller
                 'comment' => $review->comment,
             ],
         ], 201);
+    }
+
+    #[
+        OA\Put(
+            path: '/api/products/{productId}/reviews/{reviewId}',
+            summary: 'Update your own review',
+            tags: ['Reviews'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+                new OA\Parameter(name: 'reviewId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Review updated'),
+                new OA\Response(response: 403, description: 'Not your review'),
+                new OA\Response(response: 404, description: 'Review not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
+    public function update(Request $request, int $productId, int $reviewId): JsonResponse
+    {
+        $review = Review::where('user_id', $request->user()->id)
+            ->where('product_id', $productId)
+            ->where('id', $reviewId)
+            ->firstOrFail();
+
+        $validated = $request->validate([
+            'rating'  => 'required|integer|min:1|max:5',
+            'comment' => 'nullable|string|max:1000',
+        ]);
+
+        $review->update([
+            'rating'      => $validated['rating'],
+            'comment'     => $validated['comment'] ?? null,
+            'is_approved' => false,
+        ]);
+
+        return response()->json([
+            'message' => 'Review updated successfully.',
+            'data'    => [
+                'id'      => $review->id,
+                'rating'  => $review->rating,
+                'comment' => $review->comment,
+            ],
+        ]);
+    }
+
+    #[
+        OA\Delete(
+            path: '/api/products/{productId}/reviews/{reviewId}',
+            summary: 'Delete your own review',
+            tags: ['Reviews'],
+            security: [['sanctum' => []]],
+            parameters: [
+                new OA\Parameter(name: 'productId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+                new OA\Parameter(name: 'reviewId', in: 'path', required: true, schema: new OA\Schema(type: 'integer')),
+            ],
+            responses: [
+                new OA\Response(response: 200, description: 'Review deleted'),
+                new OA\Response(response: 403, description: 'Not your review'),
+                new OA\Response(response: 404, description: 'Review not found'),
+                new OA\Response(response: 401, description: 'Unauthenticated'),
+            ]
+        )
+    ]
+    public function destroy(Request $request, int $productId, int $reviewId): JsonResponse
+    {
+        $review = Review::where('user_id', $request->user()->id)
+            ->where('product_id', $productId)
+            ->where('id', $reviewId)
+            ->firstOrFail();
+
+        $review->delete();
+
+        return response()->json(['message' => 'Review deleted successfully.']);
     }
 }

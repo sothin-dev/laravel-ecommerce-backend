@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Admin as Admin;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\CartController;
 use App\Http\Controllers\Api\CategoryController;
@@ -26,8 +27,55 @@ Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{slug}', [ProductController::class, 'show']);
 
 // Auth
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:10,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+
+// Password reset (customer)
+Route::post('/forgot-password', [\App\Http\Controllers\Api\ForgotPasswordController::class, 'sendResetLink'])
+    ->middleware('throttle:5,1');
+Route::post('/reset-password', [\App\Http\Controllers\Api\ForgotPasswordController::class, 'reset'])
+    ->middleware('throttle:10,1');
+
+/*
+|--------------------------------------------------------------------------
+| Admin API Routes (Sanctum token auth, "admin" team)
+|--------------------------------------------------------------------------
+*/
+
+Route::prefix('admin')->group(function () {
+    Route::post('/login', [Admin\AuthController::class, 'login'])->middleware('throttle:10,1');
+    Route::post('/forgot-password', [\App\Http\Controllers\Api\AdminForgotPasswordController::class, 'sendResetLink']);
+
+    Route::middleware('auth:sanctum')->group(function () {
+        // Verify the token belongs to an admin
+        Route::middleware('admin.token')->group(function () {
+
+            Route::get('/me', [Admin\AuthController::class, 'me']);
+            Route::post('/logout', [Admin\AuthController::class, 'logout']);
+            Route::get('/profile', [Admin\ProfileController::class, 'show']);
+            Route::patch('/profile', [Admin\ProfileController::class, 'update']);
+            Route::patch('/profile/password', [Admin\ProfileController::class, 'changePassword']);
+
+            Route::get('/dashboard', [Admin\DashboardController::class, 'index']);
+            Route::get('/reports/summary', [Admin\ReportController::class, 'summary']);
+
+            Route::apiResource('categories', Admin\CategoryController::class);
+            Route::apiResource('products', Admin\ProductController::class);
+            Route::apiResource('orders', Admin\OrderController::class)->only(['index', 'show']);
+            Route::post('/orders/{id}/status', [Admin\OrderController::class, 'updateStatus']);
+            Route::get('/customers', [Admin\CustomerController::class, 'index']);
+            Route::get('/customers/{id}', [Admin\CustomerController::class, 'show']);
+            Route::post('/customers/{id}/toggle-status', [Admin\CustomerController::class, 'toggleStatus']);
+            Route::apiResource('coupons', Admin\CouponController::class);
+            Route::get('/inventory', [Admin\InventoryController::class, 'index']);
+            Route::post('/inventory/{id}/stock', [Admin\InventoryController::class, 'adjustStock']);
+            Route::get('/reviews', [Admin\ReviewController::class, 'index']);
+            Route::post('/reviews/{id}/approve', [Admin\ReviewController::class, 'approve']);
+            Route::post('/reviews/{id}/hide', [Admin\ReviewController::class, 'hide']);
+            Route::delete('/reviews/{id}', [Admin\ReviewController::class, 'destroy']);
+        });
+    });
+});
 
 /*
 |--------------------------------------------------------------------------
@@ -42,6 +90,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Profile
     Route::get('/profile', [ProfileController::class, 'show']);
     Route::patch('/profile', [ProfileController::class, 'update']);
+    Route::post('/profile/avatar', [ProfileController::class, 'uploadAvatar']);
     Route::patch('/profile/password', [ProfileController::class, 'changePassword']);
 
     // Wishlist

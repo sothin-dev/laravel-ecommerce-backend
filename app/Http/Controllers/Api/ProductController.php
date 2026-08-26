@@ -125,7 +125,7 @@ class ProductController extends Controller
             ]
         )
     ]
-    public function show(string $slug): JsonResponse
+    public function show(Request $request, string $slug): JsonResponse
     {
         $product = Product::with(['category', 'images', 'reviews.user', 'variants'])
             ->where('slug', $slug)

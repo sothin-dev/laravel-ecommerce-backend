@@ -32,11 +32,12 @@ class DatabaseSeeder extends Seeder
             AdminSeeder::class,
             TestDataSeeder::class,
             CouponSeeder::class,
+            ProductImageSeeder::class,
         ]);
 
         $this->command->info('────────────────────────────────');
         $this->command->info(' All seeder completed!');
-        $this->command->info(' Admin: admin@example.com / admin123');
+        $this->command->info(' Admin: admin@example.com / admin12345');
         $this->command->info(' User:  customer1@example.com / password');
         $this->command->info('────────────────────────────────');
     }

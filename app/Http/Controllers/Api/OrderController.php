@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\Cart;
 use App\Models\Coupon;
+use App\Models\CouponUsage;
 use App\Models\Order;
 use App\Models\OrderItem;
 use Illuminate\Http\JsonResponse;
@@ -40,7 +41,7 @@ class OrderController extends Controller
         $perPage = min((int) $request->get('per_page', 10), 50);
 
         $orders = Order::where('user_id', $request->user()->id)
-            ->with('items.product')
+            ->with(['items.product', 'items.variant'])
             ->latest()
             ->paginate($perPage);
 
@@ -79,7 +80,7 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', $request->user()->id)
             ->where('order_number', $orderNumber)
-            ->with('items.product')
+            ->with(['items.product', 'items.variant'])
             ->firstOrFail();
 
         return response()->json(['data' => $this->formatOrder($order, detail: true)]);
@@ -122,15 +123,23 @@ class OrderController extends Controller
         ]);
 
         $userId    = $request->user()->id;
-        $cartItems = Cart::where('user_id', $userId)->with('product')->get();
+        $cartItems = Cart::where('user_id', $userId)->with(['product', 'variant'])->get();
 
         if ($cartItems->isEmpty()) {
             return response()->json(['message' => 'Your cart is empty.'], 422);
         }
 
-        // Validate stock before creating order
+        // Validate stock before creating order (variant-aware)
         foreach ($cartItems as $item) {
-            if (! $item->product->is_active || $item->quantity > $item->product->stock) {
+            if (! $item->product || ! $item->product->is_active) {
+                return response()->json([
+                    'message' => "\"{$item->name}\" is no longer available.",
+                ], 422);
+            }
+
+            $availableStock = $item->variant ? $item->variant->stock : $item->product->stock;
+
+            if ($item->quantity > $availableStock) {
                 return response()->json([
                     'message' => "Insufficient stock for \"{$item->product->name}\".",
                 ], 422);
@@ -150,7 +159,7 @@ class OrderController extends Controller
             }
 
             $evaluation = $coupon->evaluate((float) $cartItems->sum(
-                fn ($item) => ($item->product->sale_price ?? $item->product->price) * $item->quantity
+                fn ($item) => $this->unitPrice($item) * $item->quantity
             ), $request->user());
 
             if (! $evaluation['valid']) {
@@ -161,9 +170,7 @@ class OrderController extends Controller
         }
 
         $order = DB::transaction(function () use ($cartItems, $userId, $validated, $discount, $coupon) {
-            $subtotal = $cartItems->sum(fn ($item) =>
-                ($item->product->sale_price ?? $item->product->price) * $item->quantity
-            );
+            $subtotal = $cartItems->sum(fn ($item) => $this->unitPrice($item) * $item->quantity);
             $shippingFee = $subtotal >= 50 ? 0 : 5; // free shipping over $50
             $total       = max(0, $subtotal + $shippingFee - $discount);
 
@@ -182,7 +189,7 @@ class OrderController extends Controller
             ]);
 
             foreach ($cartItems as $item) {
-                $unitPrice = $item->product->sale_price ?? $item->product->price;
+                $unitPrice = $this->unitPrice($item);
 
                 OrderItem::create([
                     'order_id'   => $order->id,
@@ -218,7 +225,7 @@ class OrderController extends Controller
 
         return response()->json([
             'message' => 'Order placed successfully.',
-            'data'    => $this->formatOrder($order->load('items.product'), detail: true),
+            'data'    => $this->formatOrder($order->load(['items.product', 'items.variant']), detail: true),
         ], 201);
     }
 
@@ -246,7 +253,7 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', $request->user()->id)
             ->where('order_number', $orderNumber)
-            ->with('items.product')
+            ->with(['items.product', 'items.variant'])
             ->firstOrFail();
 
         $added   = 0;
@@ -254,20 +261,29 @@ class OrderController extends Controller
 
         foreach ($order->items as $item) {
             $product = $item->product;
+            $variant = $item->variant;
 
-            if (!$product || !$product->is_active || $product->stock < 1) {
+            if (!$product || !$product->is_active) {
+                $skipped++;
+                continue;
+            }
+
+            $availableStock = $variant ? $variant->stock : $product->stock;
+
+            if ($availableStock < 1) {
                 $skipped++;
                 continue;
             }
 
             $cartItem = Cart::where('user_id', $request->user()->id)
                 ->where('product_id', $product->id)
+                ->where('variant_id', $item->variant_id)
                 ->first();
 
             $newQty = ($cartItem ? $cartItem->quantity : 0) + $item->quantity;
 
             // Cap at available stock
-            $newQty = min($newQty, $product->stock);
+            $newQty = min($newQty, $availableStock);
 
             if ($newQty < 1) {
                 $skipped++;
@@ -275,7 +291,7 @@ class OrderController extends Controller
             }
 
             Cart::updateOrCreate(
-                ['user_id' => $request->user()->id, 'product_id' => $product->id],
+                ['user_id' => $request->user()->id, 'product_id' => $product->id, 'variant_id' => $item->variant_id],
                 ['quantity' => $newQty]
             );
 
@@ -316,7 +332,7 @@ class OrderController extends Controller
     {
         $order = Order::where('user_id', $request->user()->id)
             ->where('order_number', $orderNumber)
-            ->with('items.product')
+            ->with(['items.product', 'items.variant'])
             ->firstOrFail();
 
         if (! in_array($order->status, ['pending', 'confirmed', 'processing'])) {
@@ -327,18 +343,47 @@ class OrderController extends Controller
 
         DB::transaction(function () use ($order) {
             foreach ($order->items as $item) {
-                if ($item->product) {
+                if ($item->variant_id && $item->variant) {
+                    $item->variant->increment('stock', $item->quantity);
+                } elseif ($item->product) {
                     $item->product->increment('stock', $item->quantity);
                 }
             }
+
+            $this->releaseCoupon($order);
 
             $order->update(['status' => 'cancelled']);
         });
 
         return response()->json([
             'message' => 'Order cancelled successfully.',
-            'data'    => $this->formatOrder($order->load('items.product'), detail: true),
+            'data'    => $this->formatOrder($order->load(['items.product', 'items.variant']), detail: true),
         ]);
+    }
+
+    /**
+     * Resolve the effective unit price for a cart item (variant price overrides product price).
+     */
+    private function unitPrice(Cart $item): float
+    {
+        if ($item->variant && $item->variant->price) {
+            return (float) $item->variant->price;
+        }
+
+        return (float) ($item->product->sale_price ?? $item->product->price);
+    }
+
+    /**
+     * Release coupon usage when an order is cancelled.
+     */
+    private function releaseCoupon(Order $order): void
+    {
+        if (! $order->coupon_id) {
+            return;
+        }
+
+        Coupon::where('id', $order->coupon_id)->decrement('used_count');
+        \App\Models\CouponUsage::where('order_id', $order->id)->delete();
     }
 
     /**

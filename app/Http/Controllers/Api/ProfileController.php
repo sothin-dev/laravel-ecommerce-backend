@@ -133,4 +133,29 @@ class ProfileController extends Controller
 
         return response()->json(['message' => 'Password changed successfully.']);
     }
+
+    /**
+     * Upload the user avatar (POST so multipart parsing works reliably).
+     */
+    public function uploadAvatar(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'avatar' => 'required|image|mimes:jpg,jpeg,png,webp|max:2048',
+        ]);
+
+        $user = $request->user();
+
+        if ($user->avatar) {
+            \Illuminate\Support\Facades\Storage::disk('public')->delete($user->avatar);
+        }
+
+        $user->update([
+            'avatar' => $validated['avatar']->store('avatars', 'public'),
+        ]);
+
+        return response()->json([
+            'message' => 'Avatar updated successfully.',
+            'data'    => ['avatar_url' => asset('storage/' . $user->avatar)],
+        ]);
+    }
 }
